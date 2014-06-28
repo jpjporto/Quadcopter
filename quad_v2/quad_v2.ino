@@ -14,7 +14,6 @@
 //AP - motor control
 #define PWM_ZERO 1500
 #define SENSOR_VOLTAGE 3.3
-#define HOVER_PWM 1750
 #define PWM_MAX 2000
 
 double error_alt, radio_alt, desired_alt = 50, alt_pwm;
@@ -152,7 +151,6 @@ void setup()
 	mpuInit();
 	pollInterval = (1000 / MPU_UPDATE_RATE) - 1; // a bit less than the minimum interval
 	lastPollTime = millis();
-	dueMPU.selectDevice(DEVICE_TO_USE);
 
 	PID_setup(alt_PID, pollInterval);	
 	PID_setup(x_PID, pollInterval);	
@@ -171,16 +169,14 @@ void loop()
 	{
 		radio_alt = radio_altitude();
 		//dueMPU.printAngles(dueMPU.m_fusedEulerPose);          // print the output of the data fusion
-		
-		alt_PID.Compute();
-	
-
 
 
 		x_axis = dueMPU.m_fusedEulerPose[VEC3_X];
 		y_axis = dueMPU.m_fusedEulerPose[VEC3_Y];
 		z_axis = dueMPU.m_fusedEulerPose[VEC3_Z];
 
+		// Compute PIDs
+		alt_PID.Compute();
 		x_PID.Compute();
 		y_PID.Compute();
 		z_PID.Compute();
