@@ -8,28 +8,32 @@
 #include <dmpmap.h>
 #include <inv_mpu.h>
 #include <inv_mpu_dmp_motion_driver.h>
+#include <PID_v1.h>
+#include <Servo.h>
 
 //AP - motor control
-#include <Servo.h>
 #define PWM_ZERO 1500
 #define SENSOR_VOLTAGE 3.3
 #define HOVER_PWM 1750
 #define PWM_MAX 2000
-#include <PID_v1.h>
 
 double error_alt, radio_alt, desired_alt = 50, alt_pwm;
 double error_x, error_y, error_z, x_axis, y_axis, z_axis, desired_x = 0, desired_y = 0, desired_z = 0;
+double x_pwm, y_pwm, z_pwm;
 int K = 5, pwm[4] = {0,0,0,0};
 
 Servo esc[4];
 const int analogInPin = A0;
 PID alt_PID(&radio_alt, &alt_pwm, &desired_alt, 5, 5, 1, DIRECT);
+PID x_PID(&x_axis, &x_pwm, &desired_x, 5, 5, 1, DIRECT);
+PID y_PID(&y_axis, &y_pwm, &desired_y, 5, 5, 1, DIRECT);
+PID z_PID(&z_axis, &z_pwm, &desired_z, 5, 5, 1, DIRECT);
 
-void PID_setup(long s_time)
+void PID_setup(PID set_PID, long s_time)
 {
-	alt_PID.SetSampleTime(s_time);
-	alt_PID.SetOutputLimits(0, PWM_MAX - PWM_ZERO);
-	alt_PID.SetMode(AUTOMATIC);
+	set_PID.SetSampleTime(s_time);
+	set_PID.SetOutputLimits(0, PWM_MAX - PWM_ZERO);
+	set_PID.SetMode(AUTOMATIC);
 }
 
 
@@ -128,8 +132,10 @@ void esc_setup()
 
 void update_speeds(int pwm[])
 {
-  for (int i = 0; i < 4; i++)
-    esc[i].writeMicroseconds(pwm[i]);
+	for (int i = 0; i < 4; i++) {
+		pwm[i] = constrain(pwm[i], PWM_ZERO, PWM_MAX);
+		esc[i].writeMicroseconds(pwm[i]);
+	}
 }
 
 void setup()
@@ -137,17 +143,21 @@ void setup()
 	analogReadResolution(12);
 
 	esc_setup();
-	
 //AP - accel stuff
 	Serial.begin(SERIAL_PORT_SPEED);
 	Serial.print("Arduino9150 starting using device ");Serial.println(DEVICE_TO_USE);
 	Wire.begin();
+	magCalSetup();
+	accelCalSetup();
 	mpuInit();
 	pollInterval = (1000 / MPU_UPDATE_RATE) - 1; // a bit less than the minimum interval
 	lastPollTime = millis();
 	dueMPU.selectDevice(DEVICE_TO_USE);
 
-	PID_setup(pollInterval);	
+	PID_setup(alt_PID, pollInterval);	
+	PID_setup(x_PID, pollInterval);	
+	PID_setup(y_PID, pollInterval);	
+	PID_setup(z_PID, pollInterval);	
 	
 	//AP - last thing, loiter for a while
 	delay(5000); 
@@ -170,17 +180,20 @@ void loop()
 		x_axis = dueMPU.m_fusedEulerPose[VEC3_X];
 		y_axis = dueMPU.m_fusedEulerPose[VEC3_Y];
 		z_axis = dueMPU.m_fusedEulerPose[VEC3_Z];
-		
-		error_x = desired_x - x_axis;
-		error_y = desired_y - y_axis;
-		error_z = desired_z - z_axis;
+
+		x_PID.Compute();
+		y_PID.Compute();
+		z_PID.Compute();
 	
 		
  //AP - motor control
 
-		for (int i = 0; i < 4; i++)
-			pwm[i] = PWM_ZERO + alt_pwm;
-		
+		//for (int i = 0; i < 4; i++)
+			//pwm[i] = PWM_ZERO + alt_pwm;
+		pwm[0] = PWM_ZERO + alt_pwm + x_pwm;
+		pwm[1] = PWM_ZERO + alt_pwm + y_pwm;
+		pwm[2] = PWM_ZERO + alt_pwm - x_pwm;
+		pwm[3] = PWM_ZERO + alt_pwm - y_pwm;
 		update_speeds(pwm);
 		
 		Serial.print(pwm[0]);
@@ -191,3 +204,29 @@ void loop()
 
 }
 
+
+void magCalSetup(void)
+{
+  calLibRead(DEVICE_TO_USE, &calData);
+  calData.magValid = true;
+  calData.magMinX = -142;                                // init mag cal data
+  calData.magMaxX = 42;
+  calData.magMinY = 26;                              
+  calData.magMaxY = 199;
+  calData.magMinZ = -304;                             
+  calData.magMaxZ = -108; 
+  calLibWrite(DEVICE_TO_USE, &calData);
+}
+
+void accelCalSetup(void)
+{
+  calLibRead(DEVICE_TO_USE, &calData);
+  calData.accelValid = true;
+  calData.accelMinX = -12666;                                // init mag cal data
+  calData.accelMaxX = 13536;
+  calData.accelMinY = -12522;                              
+  calData.accelMaxY = 14488;
+  calData.accelMinZ = -16558;                             
+  calData.accelMaxZ = -17888; 
+  calLibWrite(DEVICE_TO_USE, &calData);
+}
