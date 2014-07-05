@@ -1,4 +1,3 @@
-//AP - accel stuff
 #include <Wire.h>
 #include "I2Cdev.h"
 #include "MPU9150Lib.h"
@@ -11,10 +10,12 @@
 #include <PID_v1.h>
 #include <Servo.h>
 
-//AP - motor control
+//Constants
 #define PWM_ZERO 1500
 #define SENSOR_VOLTAGE 3.3
 #define PWM_MAX 2000
+#define RADIO_MAX 100
+#define RADIO_MIN 20
 
 double error_alt, radio_alt, desired_alt = 50, alt_pwm;
 double error_x, error_y, error_z, x_axis, y_axis, z_axis, desired_x = 0, desired_y = 0, desired_z = 0;
@@ -28,7 +29,7 @@ PID x_PID(&x_axis, &x_pwm, &desired_x, 5, 5, 1, DIRECT);
 PID y_PID(&y_axis, &y_pwm, &desired_y, 5, 5, 1, DIRECT);
 PID z_PID(&z_axis, &z_pwm, &desired_z, 5, 5, 1, DIRECT);
 
-void PID_setup(PID set_PID, long s_time)
+inline void PID_setup(PID set_PID, long s_time)
 {
 	set_PID.SetSampleTime(s_time);
 	set_PID.SetOutputLimits(0, PWM_MAX - PWM_ZERO);
@@ -114,7 +115,7 @@ inline double radio_altitude(void)
   static unsigned int processed_val = processed_val * 0.75 + sensorValue * 0.25;
   double Voltage = (double)sensorValue*SENSOR_VOLTAGE/4096;
   double dist = 41.543*pow((Voltage + 0.30221),-1.5281);
-  return dist;
+  return constrain(dist, RADIO_MIN, RADIO_MAX);
 }
 
 void esc_setup()
