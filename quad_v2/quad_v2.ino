@@ -164,12 +164,12 @@ void setup()
 	accelCalSetup();
 	mpuInit();
 	pollInterval = (1000 / MPU_UPDATE_RATE) - 1; // a bit less than the minimum interval
-	lastPollTime = millis();
-
-	PID_setup();	
+	lastPollTime = millis();	
 	
 	//AP - last thing, loiter for a while
-	delay(5000); 
+	delay(30000); 
+PID_setup();
+
 }
 
 void loop()
@@ -182,9 +182,9 @@ void loop()
 		//dueMPU.printAngles(dueMPU.m_fusedEulerPose);          // print the output of the data fusion
 
 
-		x_axis = dueMPU.m_fusedEulerPose[VEC3_X];
-		y_axis = dueMPU.m_fusedEulerPose[VEC3_Y];
-		z_axis = dueMPU.m_fusedEulerPose[VEC3_Z];
+		x_axis = dueMPU.m_fusedEulerPose[VEC3_X]*RAD_TO_DEGREE;
+		y_axis = dueMPU.m_fusedEulerPose[VEC3_Y]*RAD_TO_DEGREE;
+		z_axis = dueMPU.m_fusedEulerPose[VEC3_Z]*RAD_TO_DEGREE;
 
 		// Compute PIDs
 		alt_PID.Compute();
@@ -203,9 +203,9 @@ void loop()
 		pwm[3] = PWM_ZERO + alt_pwm - y_pwm;
 		update_speeds(pwm);
 		
-		Serial.print(pwm[0]);
-		Serial.print("; ");
-		Serial.println(radio_alt);
+		//Serial.print(pwm[0]);
+		//Serial.print("; ");
+		//Serial.println(x_axis);
 		
 	} //end duePoll() loop
 
