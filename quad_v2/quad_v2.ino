@@ -16,11 +16,13 @@
 #define PWM_MAX 2000
 #define RADIO_MAX 100
 #define RADIO_MIN 20
+#define MAX_ANGLE 60
 
 double error_alt, radio_alt, desired_alt = 50, alt_pwm;
 double error_x, error_y, error_z, x_axis, y_axis, z_axis, desired_x = 0, desired_y = 0, desired_z = 0;
 double x_pwm, y_pwm, z_pwm;
 int K = 5, pwm[4] = {0,0,0,0};
+bool flight;
 
 Servo esc[4];
 const int analogInPin = A0;
@@ -168,7 +170,8 @@ void setup()
 	
 	//AP - last thing, loiter for a while
 	delay(30000); 
-PID_setup();
+	PID_setup();
+	flight = TRUE;
 
 }
 
@@ -176,7 +179,7 @@ void loop()
 {  
 	
 	
-	if (duePoll())    // get the latest data if ready yet
+	if ((duePoll())&&(flight))    // get the latest data if ready yet
 	{
 		radio_alt = radio_altitude();
 		//dueMPU.printAngles(dueMPU.m_fusedEulerPose);          // print the output of the data fusion
@@ -185,7 +188,7 @@ void loop()
 		x_axis = dueMPU.m_fusedEulerPose[VEC3_X]*RAD_TO_DEGREE;
 		y_axis = dueMPU.m_fusedEulerPose[VEC3_Y]*RAD_TO_DEGREE;
 		z_axis = dueMPU.m_fusedEulerPose[VEC3_Z]*RAD_TO_DEGREE;
-
+		
 		// Compute PIDs
 		alt_PID.Compute();
 		x_PID.Compute();
@@ -201,6 +204,15 @@ void loop()
 		pwm[1] = PWM_ZERO + alt_pwm + y_pwm;
 		pwm[2] = PWM_ZERO + alt_pwm - x_pwm;
 		pwm[3] = PWM_ZERO + alt_pwm - y_pwm;
+		
+		//AP - if angle is too large, shut down
+		if ((abs(x_axis) > MAX_ANGLE)||(abs(y_axis) > MAX_ANGLE)){
+			pwm[0] = PWM_ZERO;
+			pwm[1] = PWM_ZERO;
+			pwm[2] = PWM_ZERO;
+			pwm[3] = PWM_ZERO;
+			flight = FALSE;
+		}
 		update_speeds(pwm);
 		
 		//Serial.print(pwm[0]);
