@@ -22,7 +22,13 @@ double error_alt, radio_alt, desired_alt = 50, alt_pwm;
 double error_x, error_y, error_z, x_axis, y_axis, z_axis, desired_x = 0, desired_y = 0, desired_z = 0;
 double x_pwm, y_pwm, z_pwm;
 int K = 5, pwm[4] = {0,0,0,0};
-bool flight;
+int flight_st;
+
+enum FLIGHT_STATUS{
+	FS_FLIGHT,
+	FS_ERROR
+
+};
 
 Servo esc[4];
 const int analogInPin = A0;
@@ -171,7 +177,7 @@ void setup()
 	//AP - last thing, loiter for a while
 	delay(30000); 
 	PID_setup();
-	flight = TRUE;
+	flight_st = FS_FLIGHT;
 
 }
 
@@ -179,7 +185,7 @@ void loop()
 {  
 	
 	
-	if ((duePoll())&&(flight))    // get the latest data if ready yet
+	if ((duePoll())&&(flight_st == FS_FLIGHT))    // get the latest data if ready yet
 	{
 		radio_alt = radio_altitude();
 		//dueMPU.printAngles(dueMPU.m_fusedEulerPose);          // print the output of the data fusion
@@ -211,7 +217,7 @@ void loop()
 			pwm[1] = PWM_ZERO;
 			pwm[2] = PWM_ZERO;
 			pwm[3] = PWM_ZERO;
-			flight = FALSE;
+			flight_st = FS_ERROR;
 		}
 		update_speeds(pwm);
 		
