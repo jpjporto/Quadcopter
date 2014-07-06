@@ -24,17 +24,10 @@ int K = 5, pwm[4] = {0,0,0,0};
 
 Servo esc[4];
 const int analogInPin = A0;
-PID alt_PID(&radio_alt, &alt_pwm, &desired_alt, 5, 5, 1, DIRECT);
+PID alt_PID(&radio_alt, &alt_pwm, &desired_alt, 5, 1, .5, DIRECT);
 PID x_PID(&x_axis, &x_pwm, &desired_x, 5, 5, 1, DIRECT);
 PID y_PID(&y_axis, &y_pwm, &desired_y, 5, 5, 1, DIRECT);
 PID z_PID(&z_axis, &z_pwm, &desired_z, 5, 5, 1, DIRECT);
-
-inline void PID_setup(PID set_PID, long s_time)
-{
-	set_PID.SetSampleTime(s_time);
-	set_PID.SetOutputLimits(0, PWM_MAX - PWM_ZERO);
-	set_PID.SetMode(AUTOMATIC);
-}
 
 
 //  DEVICE_TO_USE selects whether the IMU at address 0x68 (default) or 0x69 is used
@@ -104,6 +97,26 @@ boolean duePoll()
   return false;                                              // try again next time round
 }
 
+void PID_setup()
+{
+	int sample_time = (1000 / MPU_UPDATE_RATE) - 1;
+	alt_PID.SetSampleTime(sample_time);
+	alt_PID.SetOutputLimits(0, PWM_MAX - PWM_ZERO);
+	alt_PID.SetMode(AUTOMATIC);
+	
+	x_PID.SetSampleTime(sample_time);
+	x_PID.SetOutputLimits(0, PWM_MAX - PWM_ZERO);
+	x_PID.SetMode(AUTOMATIC);
+	
+	y_PID.SetSampleTime(sample_time);
+	y_PID.SetOutputLimits(0, PWM_MAX - PWM_ZERO);
+	y_PID.SetMode(AUTOMATIC);
+	
+	z_PID.SetSampleTime(sample_time);
+	z_PID.SetOutputLimits(0, PWM_MAX - PWM_ZERO);
+	z_PID.SetMode(AUTOMATIC);
+}
+
 /*
 	Get radio altitude
 	inputs: none
@@ -153,10 +166,7 @@ void setup()
 	pollInterval = (1000 / MPU_UPDATE_RATE) - 1; // a bit less than the minimum interval
 	lastPollTime = millis();
 
-	PID_setup(alt_PID, pollInterval);	
-	PID_setup(x_PID, pollInterval);	
-	PID_setup(y_PID, pollInterval);	
-	PID_setup(z_PID, pollInterval);	
+	PID_setup();	
 	
 	//AP - last thing, loiter for a while
 	delay(5000); 
