@@ -256,7 +256,7 @@ void takeoffMode()
 	short acc = m_calAccel;
 	alt = pressure.altitude(P,baseline)/100.0;
 
-	compensated_acc_q = compute_compensated_acc(q, acc)
+	compensated_acc_q = compute_compensated_acc(*q, *acc)
 	compensated_acc_q_earth = self.compute_dynamic_acceleration_vector(q, compensated_acc_q)
 
 	self.last_orig_altitude = alt
@@ -264,7 +264,7 @@ void takeoffMode()
 }
 
     # Remove gravity from accelerometer measurements
-void compute_compensated_acc(q[], a[], )
+void compute_compensated_acc(q, a)
 {
 	double g[3];
 	g[0] = 2*(q[1]*q[3] - q[0]*q[2]);
