@@ -93,8 +93,15 @@ void magCalLoop(void);
 void accelCalStart(void);
 void accelCalLoop(void);
 
+
+// Barometer variables
 SFE_BMP180 pressure;
 double baseline; // baseline pressure
+
+float altitude_error_i, acc_scale, altitude_error, inst_error;
+float inst_acceleration, delta, estimated_velocity, estimated_altitude;
+float last_orig_altitude, last_estimated_altitude;
+float FACTOR, KP1, KP2, KI, dt;
 
 void mpuInit()
 {
@@ -180,7 +187,8 @@ void setup()
 	accelCalSetup();
 	mpuInit();
 	pollInterval = (1000 / MPU_UPDATE_RATE) - 1; // a bit less than the minimum interval
-	lastPollTime = millis();	
+	lastPollTime = millis();
+	alt_init();
 	
 	if (!pressure.begin())
 		Serial.println("Barometer not working");
@@ -250,37 +258,71 @@ void takeoffMode()
 	desired_alt = 50;
 }
 
- void update()
- {
-	float q = m_fusedQuaternion;
-	short acc = m_calAccel;
-	alt = pressure.altitude(P,baseline)/100.0;
+void alt_init()
+{
+	FACTOR = 1;
+	KP1 = 0.55*FACTOR; // PI observer velocity gain
+	KP2 = 1.0*FACTOR; // PI observer position gain
+	KI = 0.001/FACTOR; // PI observer integral gain (bias cancellation)
 
-	compensated_acc_q = compute_compensated_acc(*q, *acc)
-	compensated_acc_q_earth = self.compute_dynamic_acceleration_vector(q, compensated_acc_q)
+	altitude_error_i = 0;
+	acc_scale = 0.0;
+	altitude_error = 0;
+	inst_acceleration = 0;
+	delta = 0;
+	estimated_velocity = 0;
+	estimated_altitude = 0;
 
-	self.last_orig_altitude = alt
-	self.last_estimated_altitude = self.compute_altitude(compensated_acc_q_earth[2], alt)
+	last_orig_altitude = 0;
+	last_estimated_altitude = 0;
+	dt = 0.05;
 }
 
-    # Remove gravity from accelerometer measurements
-void compute_compensated_acc(q, a)
+void altitude_update()
 {
-	double g[3];
+	MPUQuaternion compensated_acc_q, compensated_acc_q_earth, q;
+	q[0] = dueMPU.m_fusedQuaternion[0];
+	q[1] = dueMPU.m_fusedQuaternion[1];
+	q[2] = dueMPU.m_fusedQuaternion[2];
+	q[3] = dueMPU.m_fusedQuaternion[3];
+	MPUVector3 acc;
+	acc[0] = (float) dueMPU.m_calAccel[0];
+	acc[1] = (float) dueMPU.m_calAccel[0];
+	acc[2] = (float) dueMPU.m_calAccel[0];
+	
+	double P = getPressure();
+	float alt = pressure.altitude(P,baseline)/100.0;
+
+	compute_compensated_acc(q, acc, compensated_acc_q);
+	compute_dynamic_acceleration_vector(q, compensated_acc_q, compensated_acc_q_earth);
+
+	last_orig_altitude = alt;
+	last_estimated_altitude = compute_altitude(compensated_acc_q_earth[3], alt);
+}
+
+// Remove gravity from accelerometer measurements
+void compute_compensated_acc(MPUQuaternion q, MPUVector3 a, MPUQuaternion comp_a)
+{
+	MPUVector3 g;
 	g[0] = 2*(q[1]*q[3] - q[0]*q[2]);
 	g[1] = 2*(q[0]*q[1] + q[2]*q[3]);
 	g[2] = q[0]*q[0] - q[1]*q[1] - q[2]*q[2] + q[3]*q[3];
 
-	return (a[0]/1000.0 - g[0],
-			a[1]/1000.0 - g[1],
-			a[2]/1000.0 - g[2],
-			0.0)
+	comp_a[0] = 0.0;
+	comp_a[1] = a[0]/1000.0 - g[0];
+	comp_a[2] = a[1]/1000.0 - g[1];
+	comp_a[3] = a[2]/1000.0 - g[2];
 }
-    # Rotate dynamic acceleration vector from sensor frame to earth frame
-void compute_dynamic_acceleration_vector(q, compensated_acc_q)
-{
-	q_conj = 0-q;
 
+// Rotate dynamic acceleration vector from sensor frame to earth frame
+void compute_dynamic_acceleration_vector(const MPUQuaternion q, const MPUQuaternion compensated_acc_q, MPUQuaternion compensated_acc_q_earth)
+{
+	MPUQuaternion q_conj, tmp;
+	MPUQuaternionConjugate(q, q_conj);
+
+	MPUQuaternionMultiply(q, compensated_acc_q, tmp);
+	MPUQuaternionMultiply(tmp, q_conj, compensated_acc_q_earth);
+	/*
 	float tmp[4];
 	tmp[0] = q[3]*acc_q[3] - q[0]*acc_q[0] - q[1]*acc_q[1] - q[2]*acc_q[2];
 	tmp[1] = q[3]*acc_q[0] + q[0]*acc_q[3] + q[1]*acc_q[2] - q[2]*acc_q[1];
@@ -294,39 +336,38 @@ void compute_dynamic_acceleration_vector(q, compensated_acc_q)
             z = w1 * z2 + z1 * w2 + x1 * y2 - y1 * x2
 
             return x, y, z, w
-
+	
         tmp = q_mult(q, compensated_acc_q)
         return q_mult(tmp, q_conj(q))
+	*/
 }
 
-    # Computes estimation of altitude based on barometer and accelerometer measurements
-    # Code is based on blog post from Fabio Varesano: http://www.varesano.net/blog/fabio/complementary-filtering-high-res-barometer-and-accelerometer-reliable-altitude-estimation
-    # He seems to have got the idea from the MultiWii project
-void compute_altitude(compensated_acceleration, altitude)
+// Computes estimation of altitude based on barometer and accelerometer measurements
+// Code is based on blog post from Fabio Varesano: http://www.varesano.net/blog/fabio/complementary-filtering-high-res-barometer-and-accelerometer-reliable-altitude-estimation
+// He seems to have got the idea from the MultiWii project
+float compute_altitude(float compensated_acceleration, float altitude)
 {
-        self.current_time = time.time()
-    
-        # Initialization
-        if not self.initialized:
-            self.initialized = True
-            self.estimated_altitude = altitude
-            self.estimated_velocity = 0
-            self.altitude_error_i = 0
+/*
+	# Initialization
+	if not self.initialized:
+		self.initialized = True
+		self.estimated_altitude = altitude
+		self.estimated_velocity = 0
+		self.altitude_error_i = 0
+*/
+	// Estimation Error
+	altitude_error = altitude - estimated_altitude;
+	altitude_error_i = altitude_error_i + altitude_error;
+	altitude_error_i = constrain(altitude_error_i, -2500.0, 2500.0);
 
-        # Estimation Error
-        self.altitude_error = altitude - self.estimated_altitude
-        self.altitude_error_i = self.altitude_error_i + self.altitude_error
-        self.altitude_error_i = min(2500.0, max(-2500.0, self.altitude_error_i))
-
-        self.inst_acceleration = compensated_acceleration * 9.80665 + self.altitude_error_i * self.KI
-        dt = self.current_time - self.last_time
-
-        # Integrators
-        self.delta = self.inst_acceleration * dt + (self.KP1 * dt) * self.altitude_error
-        self.estimated_altitude += (self.estimated_velocity/5.0 + self.delta) * (dt / 2) + (self.KP2 * dt) * self.altitude_error
-        self.estimated_velocity += self.delta*10.0
-    
-        self.last_time = self.current_time
+	inst_acceleration = compensated_acceleration * 9.80665 + altitude_error_i * KI;
+	
+	// Integrators
+	delta = inst_acceleration * dt + (KP1 * dt) * altitude_error;
+	estimated_altitude += (estimated_velocity/5.0 + delta) * (dt / 2) + (KP2 * dt) * altitude_error;
+	estimated_velocity += delta*10.0;
+	
+	return estimated_altitude;
 }
 
 void magCalSetup(void)
