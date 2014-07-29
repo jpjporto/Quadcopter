@@ -277,11 +277,14 @@ void compute_compensated_acc(q, a)
 			0.0)
 }
     # Rotate dynamic acceleration vector from sensor frame to earth frame
-void compute_dynamic_acceleration_vector(self, q, compensated_acc_q)
+void compute_dynamic_acceleration_vector(q, compensated_acc_q)
 {
-        def q_conj(q):
-            return -q[0], -q[1], -q[2], q[3]
+	q_conj = 0-q;
 
+	float tmp[4];
+	tmp[0] = q[3]*acc_q[3] - q[0]*acc_q[0] - q[1]*acc_q[1] - q[2]*acc_q[2];
+	tmp[1] = q[3]*acc_q[0] + q[0]*acc_q[3] + q[1]*acc_q[2] - q[2]*acc_q[1];
+	tmp[2] = 
         def q_mult(q1, q2):
             x1, y1, z1, w1 = q1
             x2, y2, z2, w2 = q2
