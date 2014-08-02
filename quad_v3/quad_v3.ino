@@ -21,7 +21,7 @@
 #define MAX_ANGLE 30
 
 //Serial port, use this if using bluetooth board on serial1
-#define Serial Serial1
+//#define Serial Serial1
 
 double error_alt, radio_alt, desired_alt = 50, alt_pwm;
 double error_x, error_y, error_z, x_axis, y_axis, z_axis, desired_x = 0, desired_y = 0, desired_z = 0;
@@ -215,6 +215,8 @@ void loop()
 		y_axis = dueMPU.m_fusedEulerPose[VEC3_Y]*RAD_TO_DEGREE;
 		z_axis = dueMPU.m_fusedEulerPose[VEC3_Z]*RAD_TO_DEGREE;
 		
+		altitude_update();
+		
 		// Compute PIDs
 		alt_PID.Compute();
 		x_PID.Compute();
@@ -291,13 +293,20 @@ void altitude_update()
 	acc[2] = (float) dueMPU.m_calAccel[0];
 	
 	double P = getPressure();
-	float alt = pressure.altitude(P,baseline)/100.0;
+	float alt = (float) pressure.altitude(P,baseline)/100.0;
+	
+	Serial.print("Pressure: ")
+	Serial.print(P);
+	Serial.print("Baro alt: ");
+	Serial.print(alt);
 
 	compute_compensated_acc(q, acc, compensated_acc_q);
 	compute_dynamic_acceleration_vector(q, compensated_acc_q, compensated_acc_q_earth);
 
 	last_orig_altitude = alt;
 	last_estimated_altitude = compute_altitude(compensated_acc_q_earth[3], alt);
+	Serial.print("Est Alt: ");
+	Serial.println(last_estimated_altitude);
 }
 
 // Remove gravity from accelerometer measurements
