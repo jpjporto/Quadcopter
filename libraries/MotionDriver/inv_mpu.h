@@ -25,7 +25,7 @@
 
 //  Define this symbol to get debug messages
 
-#define  MPU_DEBUG
+//#define  MPU_DEBUG
 
 //  Define this symbol to enable rarely-used functions from library
 
