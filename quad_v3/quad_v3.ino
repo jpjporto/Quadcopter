@@ -96,12 +96,12 @@ void accelCalLoop(void);
 
 // Barometer variables
 SFE_BMP180 pressure;
-double baseline; // baseline pressure
+double baseline, P, alt_temp; // baseline pressure
 
 float altitude_error_i, acc_scale, altitude_error, inst_error;
 float inst_acceleration, delta, estimated_velocity, estimated_altitude;
 float last_orig_altitude, last_estimated_altitude;
-float FACTOR, KP1, KP2, KI, dt;
+float FACTOR, KP1, KP2, KI, dt, alt;
 
 void mpuInit()
 {
@@ -234,18 +234,19 @@ void loop()
 		pwm[3] = PWM_ZERO + alt_pwm - y_pwm;
 		
 		//AP - if angle is too large, shut down
+/*
 		if ((abs(x_axis) > MAX_ANGLE)||(abs(y_axis) > MAX_ANGLE)){
 			pwm[0] = PWM_ZERO;
 			pwm[1] = PWM_ZERO;
 			pwm[2] = PWM_ZERO;
 			pwm[3] = PWM_ZERO;
 			flight_st = FS_ERROR;
-		}
+		}*/
 		update_speeds(pwm);
 		
 		//Serial.print(pwm[0]);
 		//Serial.print("; ");
-		Serial1.println(x_axis);
+		//Serial1.println("Loop");
 		
 	} //end duePoll() loop
 
@@ -289,23 +290,24 @@ void altitude_update()
 	q[3] = dueMPU.m_fusedQuaternion[3];
 	MPUVector3 acc;
 	acc[0] = (float) dueMPU.m_calAccel[0];
-	acc[1] = (float) dueMPU.m_calAccel[0];
-	acc[2] = (float) dueMPU.m_calAccel[0];
+	acc[1] = (float) dueMPU.m_calAccel[1];
+	acc[2] = (float) dueMPU.m_calAccel[2];
 	
-	double P = getPressure();
-	float alt = (float) pressure.altitude(P,baseline)/100.0;
-	
-	Serial.print("Pressure: ")
-	Serial.print(P);
-	Serial.print("Baro alt: ");
-	Serial.print(alt);
+	P = getPressure();
+	alt_temp = pressure.altitude(P,baseline);
+	alt = (float) alt_temp;
 
 	compute_compensated_acc(q, acc, compensated_acc_q);
 	compute_dynamic_acceleration_vector(q, compensated_acc_q, compensated_acc_q_earth);
+	
+	Serial.print("Compensated_acc_q_earth[0]: ");
+	Serial.print(compensated_acc_q_earth[2]);
+	Serial.print("; Compensated_acc_q_earth[1]: ");
+	Serial.print(compensated_acc_q_earth[3]);
 
 	last_orig_altitude = alt;
 	last_estimated_altitude = compute_altitude(compensated_acc_q_earth[3], alt);
-	Serial.print("Est Alt: ");
+	Serial.print("; Est Alt: ");
 	Serial.println(last_estimated_altitude);
 }
 
