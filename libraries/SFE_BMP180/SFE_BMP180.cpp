@@ -21,6 +21,9 @@
 #include <stdio.h>
 #include <math.h>
 
+//Use this if Barometer is using the secondary I2C ports
+#define Wire Wire1
+
 
 SFE_BMP180::SFE_BMP180()
 // Base library type
